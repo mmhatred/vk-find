@@ -8,7 +8,7 @@
             <ColumnDefinition Width="155*" />
         </Grid.ColumnDefinitions>
         <Button Content="Войти" Height="59" HorizontalAlignment="Right" Margin="0,42,12,0" Name="LoginButton" VerticalAlignment="Top" Width="254" Click="LoginButton_Click" Grid.ColumnSpan="2" />
-        <Label Height="25" HorizontalAlignment="Stretch" Margin="12,110,12,0" Name="ErrorText" VerticalAlignment="Top" Content="Шаг 1: войдите ВКонтакте, нажав &quot;Войти&quot;" Grid.ColumnSpan="2" HorizontalContentAlignment="Center" />
+        <Label Height="25" HorizontalAlignment="Stretch" Margin="12,110,12,0" Name="ErrorText" VerticalAlignment="Top" Content="Шаг 1: войдите ВКонтакте, нажав Войти" Grid.ColumnSpan="2" HorizontalContentAlignment="Center" />
         <Label Content="Введите адрес искомой страницы (или id):" Height="27" HorizontalAlignment="Left" Margin="12,146,0,0" Name="label3" VerticalAlignment="Top" Width="254" Grid.ColumnSpan="2" HorizontalContentAlignment="Center" />
         <TextBox Height="25" HorizontalAlignment="Left" Margin="52,184,0,0" Name="FindIDTextBox" VerticalAlignment="Top" Width="127" Grid.ColumnSpan="2" KeyDown="FindIDTextBox_KeyDown" />
         <Button Content="Проверить" Height="25" HorizontalAlignment="Right" Margin="0,182,12,0" Name="CheckButton" VerticalAlignment="Top" Width="82" Grid.Column="1" Click="CheckButton_Click" />
