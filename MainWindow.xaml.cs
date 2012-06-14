@@ -206,7 +206,12 @@ namespace vk1
                 return;
             } // if (findingUser == null)
             
-        } // FindButton_Click
+        }// FindButton_Click
+        //клик по кнопке скрытия окна
+        private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.WindowState = System.Windows.WindowState.Minimized;
+        } // MinimizeButton_Click
 
     } // public partial class MainWindow : Window
 } // namespace vk1
