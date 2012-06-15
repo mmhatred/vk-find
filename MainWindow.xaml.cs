@@ -1,18 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 using System.Net;
 using System.Xml;
+using System.Threading;
+using System.Windows.Threading;
 
 namespace vk1
 {
@@ -22,18 +17,97 @@ namespace vk1
     ///
     public partial class MainWindow : Window
     {
+        object locker = new object();//для синхронизации потоков
         string id; //айди пользователя
         string token; //токен для работы с контактом
         public string Response { get; set; } //ответ сервера авторизации
         Point mouse; //координаты мыши, нужны для перемещения окна по экрану
-        User currentUser, findingUser; //текущий и искомый пользователи
+        User currentUser, targetUser; //текущий и искомый пользователи
+        uint pagesViewed = 0; //количество просмотренных страниц
+        DispatcherTimer timer; // таймер для счетчика страниц
+        Thread findThread; // тред, в котором происходит поиск страниц
+        private List<User> userschain; // найденная цепочка пользователей
+        SortedSet<uint> viewedIDs;
+        public delegate void SearchCompleteEventHandler(object sender, EventArgs e); // обработчик заврешниея поиска
+        public event SearchCompleteEventHandler SearchComplete; // завершение поиска
+        delegate void SetButtonTextInvoker(string text); // делегат для задания текста кнопке старта поиска
+        SetButtonTextInvoker SetButtonText; // экземпляр делегата для непосредственно установки
+
+
         public MainWindow()
         {
             InitializeComponent();
             mouse = new Point();
+            userschain = new List<User>();
+            viewedIDs = new SortedSet<uint>();
+            //настраиваем таймер
+            timer = new DispatcherTimer();
+            timer.Interval = new TimeSpan(0, 0, 0, 0, 500);
+            timer.Tick += new EventHandler(timer_Tick);
+            //добавляем к делегату установки текста на кнопку функцию установки текста
+            SetButtonText = setButtonText;
             //устанавливаем фокус на кнопку входа
             LoginButton.Focus();
-        }
+        } // MainWindow
+
+        //функция, устанавливающая нужный текст на кнопку поиска
+        private void setButtonText(string text)
+        {
+            FindButton.Content = text;
+        } // setButtonText
+
+        //обработчик тика таймера
+        void timer_Tick(object sender, EventArgs e)
+        {
+            //показываем что мы не зависли и выводим счетчик просмотренных страниц
+            Dispatcher.Invoke(SetButtonText, "Стоп (обработано " + pagesViewed + " страниц)");
+        } // timer_Tick
+
+
+        //обработчик заверщения поиска
+        private void StopSearch(object sender, EventArgs e)
+        {
+            timer.Stop();
+            SearchComplete -= StopSearch;
+            Dispatcher.Invoke(SetButtonText, "Поиск завершен, вывожу результат...");
+
+            //цепочка имен пользователей
+            string chain;
+            string req = "";
+            WebRequest request;
+            WebResponse response;
+            List<User>.Enumerator t = userschain.GetEnumerator();
+            t.MoveNext();
+            req = "https://api.vk.com/method/users.get.xml?uids=" + 
+                t.Current.ID + "&access_token=" + token;
+            request = WebRequest.Create(req);
+            response = request.GetResponse();
+            XmlDocument xml = new XmlDocument();
+            xml.LoadXml(new System.IO.StreamReader(response.GetResponseStream()).ReadToEnd());
+            chain = xml["response"]["user"]["first_name"].InnerText 
+                + " " + xml["response"]["user"]["last_name"].InnerText;
+            if (userschain.Count > 1)
+            {
+                req = "https://api.vk.com/method/users.get.xml?uids=";
+                while (t.MoveNext())
+                {
+                    req += t.Current.ID + ",";
+                }
+                req = req.Substring(0, req.Length - 1);
+                req += "&access_token=" + token;
+                request = WebRequest.Create(req);
+                response = request.GetResponse();
+                xml.LoadXml(new System.IO.StreamReader(response.GetResponseStream()).ReadToEnd());
+                foreach (XmlNode node in xml["response"])
+                {
+                    chain += " -> " + node["first_name"].InnerText + " " + node["last_name"].InnerText;
+                }
+            }
+            MessageBox.Show(chain, "Цепочка от вас до искомого пользователя");
+            Dispatcher.Invoke(SetButtonText, "Найти путь");
+            userschain.Clear();
+        } //StopSearch
+
         //нажатие на кнопку входа
         private void LoginButton_Click(object sender, RoutedEventArgs e)
         {
@@ -86,16 +160,24 @@ namespace vk1
             //иначе напоминаем, что сначала надо войти
             else ErrorText.Foreground = new SolidColorBrush(Color.FromRgb(223, 0, 0)); 
         } // LoginButton_Click
+
+
         //нажатие на кнопку закрытия окна
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
+            timer.Stop();
+            if (findThread != null) findThread.Abort();
             Close();
         } // CloseButton_Click
+
+
         //когда левая кнопка мыши нажата на форме, запоминаем координаты
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             mouse = e.GetPosition(null);
         } // Window_MouseLeftButtonDown
+
+
         //если в момент движения нажата левая кнопка, двигаем окно
         private void Window_MouseMove(object sender, MouseEventArgs e)
         {
@@ -113,6 +195,8 @@ namespace vk1
                 this.Top += New.Y - mouse.Y;
             } // if (e.LeftButton == MouseButtonState.Pressed)
         } // Window_MouseMove
+
+
         //при клике по кнопке "Проверить" вытаскиваем имя или айди пользователя, и проверяем, есть ли такой
         private void CheckButton_Click(object sender, RoutedEventArgs e)
         {
@@ -138,7 +222,7 @@ namespace vk1
                 ErrorText.Content = "Шаг 2: введите адрес и нажмите Проверить";
                 System.Media.SystemSounds.Exclamation.Play();
                 //если перед этим кого-то нашли, то надо его удалить
-                findingUser = null;
+                targetUser = null;
                 //выводим подробную информацию об ошибке
                 switch (errorCode)
                 {
@@ -162,12 +246,12 @@ namespace vk1
                 ErrorText.Content = "Шаг 2: введите адрес и нажмите Проверить";
                 ErrorText.Foreground = new SolidColorBrush(Color.FromRgb(0, 0, 0));
                 //если перед этим кого-то нашли, то надо его удалить
-                findingUser = null;
+                targetUser = null;
             } // if first_name == DELETED && last_name == ""
             //иначе запоминаем найденного пользователя и переходим к шагу 3
             else
             {
-                findingUser = new User(xml["response"]["user"], 1);
+                targetUser = new User(xml["response"]["user"], 1);
                 ErrorText.Content = "Шаг 3: нажмите Найти путь";
                 ErrorText.Foreground = new SolidColorBrush(Color.FromRgb(0, 0, 0));
                 MessageBox.Show(xml["response"]["user"]["first_name"].InnerText +
@@ -176,6 +260,8 @@ namespace vk1
                 FindButton.Focus();
             } // if !(if first_name == DELETED && last_name == "")
         } // CheckButton_Click
+
+
         //если во время ввода текста в поле ввода айди нажат Enter, нажимаем Проверить
         private void FindIDTextBox_KeyDown(object sender, KeyEventArgs e)
         {
@@ -184,34 +270,151 @@ namespace vk1
                 CheckButton_Click(sender, new RoutedEventArgs(null, e));
             } // if (e.Key == Key.Enter)
         } // FindIDTextBox_KeyDown
+
+
         //при клике по кнопке поиска запускаем волновой алгоритм
         private void FindButton_Click(object sender, RoutedEventArgs e)
         {
-            //проверяем, пройден ли шаг 1...
-            if (currentUser == null || token == null)
+            //если поиск еще не запущен, запускаем
+            if (FindButton.Content.ToString() == "Найти путь")
             {
-                ErrorText.Content = "Шаг 1: войдите ВКонтакте, нажав Войти";
-                ErrorText.Foreground = new SolidColorBrush(Color.FromRgb(223, 0, 0));
-                LoginButton.Focus();
-                System.Media.SystemSounds.Exclamation.Play();
-                return;
-            } // if (currentUser == null || token == null)
-            // ...и шаг 2
-            if (findingUser == null)
+                //проверяем, пройден ли шаг 1...
+                if (currentUser == null || token == null)
+                {
+                    ErrorText.Content = "Шаг 1: войдите ВКонтакте, нажав Войти";
+                    ErrorText.Foreground = new SolidColorBrush(Color.FromRgb(223, 0, 0));
+                    LoginButton.Focus();
+                    System.Media.SystemSounds.Exclamation.Play();
+                    return;
+                } // if (currentUser == null || token == null)
+                // ...и шаг 2
+                if (targetUser == null)
+                {
+                    ErrorText.Content = "Шаг 2: введите адрес и нажмите Проверить";
+                    ErrorText.Foreground = new SolidColorBrush(Color.FromRgb(223, 0, 0));
+                    System.Media.SystemSounds.Exclamation.Play();
+                    FindIDTextBox.Focus();
+                    return;
+                } // if (findingUser == null)
+                // инициируем поиск
+                // подписываемся на событие конца поиска
+                SearchComplete += StopSearch;
+                findThread = new Thread(Find);
+                FindButton.Content = "Стоп (обработано 0 страниц)";
+                findThread.Start();
+                timer.Start();
+            } // if (FindButton.Content == "Найти путь")
+           //иначе, если поиск еще не завршен, даём возможность остановить его
+            else if (FindButton.Content.ToString().IndexOf("Стоп") != -1)
             {
-                ErrorText.Content = "Шаг 2: введите адрес и нажмите Проверить";
-                ErrorText.Foreground = new SolidColorBrush(Color.FromRgb(223, 0, 0));
-                System.Media.SystemSounds.Exclamation.Play();
-                FindIDTextBox.Focus();
-                return;
-            } // if (findingUser == null)
-            
+                //прекращаем поиск
+                findThread.Abort();
+                timer.Stop();
+                FindButton.Content = "Найти путь";
+                // TODO: сделать очистку от мусора
+            } // if (FindButton.Content.ToString().IndexOf("Стоп") != -1)
         }// FindButton_Click
+
+
         //клик по кнопке скрытия окна
         private void MinimizeButton_Click(object sender, RoutedEventArgs e)
         {
             this.WindowState = System.Windows.WindowState.Minimized;
         } // MinimizeButton_Click
 
+
+        // функция поиска
+        private void Find()
+        {
+            currentUser.ClearFriends();
+            targetUser.ClearFriends();
+            viewedIDs.Clear();
+            pagesViewed = 0;
+            userschain.Clear();
+            if (currentUser == targetUser)
+            {
+                userschain.Add(currentUser);
+                SearchComplete(this, new EventArgs());
+                return;
+            }
+ //           User current = currentUser, target = targetUser;
+            Queue<User> fromCurrent = new Queue<User>(), fromTarget = new Queue<User>();
+            fromCurrent.Enqueue(currentUser);
+            fromTarget.Enqueue(targetUser);
+            int from = 1; // 1-выборка из очереди текущего пользователя, 2 - из очереди искомого
+            while (true)
+            {
+                if (from == 1)
+                {
+                    if (fromCurrent.Count == 0)
+                    {
+                        // TODO: сделать выход, если поиск не дал результатов
+                    }
+                    User nextUser = fromCurrent.Dequeue();
+                    //если нашли, заполняем список, реверсим его и отдаем на вывод, не забыв все почистить
+                    if (nextUser == targetUser)
+                    {
+                        do
+                        {
+                            userschain.Add(nextUser);
+                            nextUser = nextUser.GetParent();
+                        } while (nextUser.Distance != 0);
+                        userschain.Add(nextUser);
+                        userschain.Reverse();
+                        fromCurrent.Clear();
+                        fromTarget.Clear();
+                        SearchComplete(this, new EventArgs());
+                        return;
+                    } // if (nextUser == targetUser)
+                    //иначе запрашиваем всех друзей, добавляем их в очередь и идем дальше
+                    bool firstError = true;//если ошибка возникла впервые, пробуем еще раз, иначе выходим и сообщаем об ошибке
+                    while (true)
+                    {
+                        string req = "https://api.vk.com/method/friends.get.xml?uid=" + 
+                            nextUser.ID + "&access_token=" + token;
+                        WebRequest request = WebRequest.Create(req);
+                        WebResponse response = request.GetResponse();
+                        XmlDocument xml = new XmlDocument();
+                        xml.LoadXml(new System.IO.StreamReader(response.GetResponseStream()).ReadToEnd());
+                        //обработка ошибок
+                        if (xml["error"] != null)
+                        {
+                            string code = xml["error"]["error_code"].InnerText;
+                            switch (code)
+                            {
+                                case "1": if (firstError) { firstError = false; Thread.Sleep(1500); continue; }
+                                    else
+                                    {
+                                        nextUser = fromCurrent.Dequeue();
+                                        break;
+                                    }
+                                case "2": goto case "1";
+                                case "4": goto case "1";
+                                case "5": goto case "1";
+                                case "6": Thread.Sleep(100); firstError = true; continue;
+                                case "7": goto case "1";// break;// TODO: сделать пропуск пользователя
+                                default: goto case "1";
+                            } // switch (code)
+                        } // if (xml["error"] != null)
+                        else
+                        {
+                            XmlNode uids = xml["response"];
+                            foreach (XmlNode uid in uids.ChildNodes)
+                            {
+                                uint id = Convert.ToUInt32(uid.InnerText);
+                                if (viewedIDs.Contains(id)) continue;
+                                viewedIDs.Add(id);
+                                User newUser = new User(id, nextUser.Distance + 1);
+                                newUser.AddFriend(currentUser);
+                                newUser = currentUser.AddFriend(newUser);
+                                fromCurrent.Enqueue(newUser);
+                            }
+                            ++pagesViewed;
+                            break;
+                        } // if (xml["error"] == null)
+                    } // while (true)
+                } // if (from == 1)
+            } // while (true)
+        } // Find
     } // public partial class MainWindow : Window
 } // namespace vk1
