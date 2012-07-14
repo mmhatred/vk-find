@@ -1,91 +1,40 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
+using System.Xml;
 
 namespace vk1
 {
-    //класс, представляющий одного пользователя
+    // Class representing a single user
     class User
     {
-        //айди - храним как число для экономии памяти
-        uint id;
-        //имя, фамилия
- //       string firstName, lastName;
-        //ассоциативный массив друзей, доступный по id
-        SortedDictionary<uint, int> friends;
-        
-        //расстояние от текущего пользователя до искомого
-        int distance;
-        //создание пользователя по айди, имени и фамилии
-        public User(uint id/*, string first, string last*/, int dist)
+        /// <summary>
+        /// User ID
+        /// </summary>
+        private uint id;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="User"/> class
+        /// </summary>
+        /// <param name="id">user ID</param>
+        public User(uint id)
         {
             this.id = id;
-//            firstName = first;
-//            lastName = last;
-            friends = new SortedDictionary<uint, int>();
-            distance = dist;
-        } // User
-        //создание пользователя из одной записи ответа сервера
-        public User(System.Xml.XmlNode node, int dist = -1) : this(Convert.ToUInt32(node["uid"].InnerText)/*,
-                              node["first_name"].InnerText, node["last_name"].InnerText*/, dist) { }
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="User"/> class
+        /// </summary>
+        /// <param name="node">XML node contains user info</param>
+        public User(XmlNode node) : this(Convert.ToUInt32(node["uid"].InnerText)) { }
+
+        /// <summary>
+        /// Gets user's ID
+        /// </summary>
         public uint ID
         {
-            get { return id; }
-        } // ID
-        public int Distance
-        {
-            get { return distance; }
-        } // Distance
-
-        //проверка пользователей на равенство
-        public static bool operator ==(User u1, User u2)
-        {
-            var u1IsNull = User.Equals(u1, null);
-            var u2IsNull = User.Equals(u2, null);
-            if (u1IsNull || u2IsNull) return (u1IsNull && u2IsNull);
-            return u1.ID == u2.ID;
-        } // operator ==
-
-        // проверка на неравенство
-        public static bool operator !=(User u1, User u2)
-        {
-            return !(u1 == u2);
-        } // operator !=
-
-        //превращение в строку - выводим айди и дистанцию
-        public override string ToString()
-        {
-            return "ID: " + id + ", distance: " + distance;
-        } // ToString
-
-        //добавление друга в словарь
-        public User AddFriend(User friend)
-        {
-            if (friends.ContainsKey(friend.ID)) return new User(friend.ID, friends[friend.ID]);
-            friends.Add(friend.ID, friend.Distance);
-            return friend;
-        } // AddFriend
-
-        //возвращает пользователя с distance на 1 меньшим, чем у заданного
-        public User GetParent()
-        {
-            foreach (var i in friends)
+            get
             {
-                if (i.Value == distance - 1) return new User(i.Key, i.Value);
+                return id;
             }
-            return null;
-        } // GetParent
-        //очистка списка друзей
-        public void ClearFriends()
-        {
-            friends.Clear();
-        } // ClearFriends
-        //public string FirstName
-        //{
-        //    get { return firstName; }
-        //} // FirstName
-        //public string LastName
-        //{
-        //    get { return lastName; }
-        //} // LastName
+        }
     } // class User
 } // namespace vk1

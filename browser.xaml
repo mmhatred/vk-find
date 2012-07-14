@@ -1,7 +1,7 @@
-ï»¿<Window x:Class="vk1.browser"
+<Window x:Class="vk1.browser"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ÐÐ²Ñ‚Ð¾Ñ€Ð¸Ð·Ð°Ñ†Ð¸Ñ" Height="519" Width="819" ResizeMode="NoResize" Loaded="Window_Loaded">
+        Title="Àâòîðèçàöèÿ" Height="519" Width="819" ResizeMode="NoResize" Loaded="Window_Loaded">
     <Grid>
         <WebBrowser Height="481" HorizontalAlignment="Left" Margin="0,-1,0,0" Name="Browser" VerticalAlignment="Top" Width="797" LoadCompleted="Browser_LoadCompleted" />
     </Grid>

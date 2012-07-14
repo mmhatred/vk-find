@@ -1,15 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 
 namespace vk1
 {
@@ -18,26 +7,45 @@ namespace vk1
     /// </summary>
     public partial class browser : Window
     {
-        string url; // урла авторизации
-        MainWindow parent; // родительское окно
+        /// <summary>
+        /// Authorization url
+        /// </summary>
+        private string url;
+
+        /// <summary>
+        /// Parent window
+        /// </summary>
+        private MainWindow parent;
+
+        /// <summary>
+        /// Initializes a new instance of <see cref="browser"/> class
+        /// </summary>
+        /// <param name="p">parent window</param>
         public browser(MainWindow p)
         {
             InitializeComponent();
             parent = p;
-            //урл для авторизации
             url = "https://oauth.vk.com/authorize?client_id=2995620&scope=friends&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token";
         } // browser
 
+        /// <summary>
+        /// Navigates browser to url after loading
+        /// </summary>
+        /// <param name="sender">event source</param>
+        /// <param name="e">event parametres</param>
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            //сразу после загрузки окна переходим по адресу авторизации
             Browser.Navigate(url);
         } // Window_Loaded
 
+        /// <summary>
+        /// Occurs when url loaded
+        /// </summary>
+        /// <param name="sender">event source</param>
+        /// <param name="e">event parametres</param>
         private void Browser_LoadCompleted(object sender, System.Windows.Navigation.NavigationEventArgs e)
         {
-            //если в результате авторизации был получен урл с подстрокой
-            //access_token, то авторизация прошла успешно - отдаем урл в основную форму
+            // If there is "access_token" substring assume login succeeded
             if (e.Uri.AbsoluteUri.IndexOf("access_token") != -1)
             {
                 parent.Response = e.Uri.AbsoluteUri;
